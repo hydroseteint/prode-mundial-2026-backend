@@ -8,9 +8,7 @@ export const getLeaderboard = async (req, res) => {
         if (cached) return res.status(200).json(cached);
 
         const [users, predictions] = await Promise.all([
-            User.find({ isActive: true })
-                .select("name username totalPoints")
-                .sort({ totalPoints: -1, name: 1 }),
+            User.find({ isActive: true }).select("name username totalPoints"),
             Prediction.find({ calculated: true }).select("user points"),
         ]);
 
@@ -21,18 +19,25 @@ export const getLeaderboard = async (req, res) => {
             predictionsByUser[uid].push(p);
         }
 
-        const leaderboard = users.map((user, i) => {
-            const userPredictions = predictionsByUser[user._id.toString()] || [];
-            return {
-                position: i + 1,
-                id: user._id,
-                name: user.name,
-                username: user.username,
-                totalPoints: user.totalPoints,
-                exactResults: userPredictions.filter((p) => p.points === 3).length,
-                correctWinner: userPredictions.filter((p) => p.points === 1).length,
-            };
-        });
+        const leaderboard = users
+            .map((user) => {
+                const userPredictions = predictionsByUser[user._id.toString()] || [];
+                return {
+                    id: user._id,
+                    name: user.name,
+                    username: user.username,
+                    totalPoints: user.totalPoints,
+                    exactResults: userPredictions.filter((p) => p.points === 3).length,
+                    correctWinner: userPredictions.filter((p) => p.points === 1).length,
+                };
+            })
+            .sort((a, b) => {
+                if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+                if (b.exactResults !== a.exactResults) return b.exactResults - a.exactResults;
+                if (b.correctWinner !== a.correctWinner) return b.correctWinner - a.correctWinner;
+                return a.name.localeCompare(b.name);
+            })
+            .map((user, i) => ({ position: i + 1, ...user }));
 
         const response = { leaderboard };
         setCache("leaderboard", response);

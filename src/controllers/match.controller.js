@@ -82,18 +82,23 @@ export const getMatchesWithUserPredictions = async (req, res) => {
 
         if (status === "closed") {
             matchQuery.startDate = { $lte: now };
-        } else if (status === "pending" || status === "predicted") {
+        } else {
+            // "all", "pending", "predicted" solo muestran partidos abiertos
             matchQuery.startDate = { $gt: now };
-            const userPredictions = await Prediction.find({ user: req.user._id }).select("match");
-            const predictedMatchIds = userPredictions.map((p) => p.match);
-            matchQuery._id = status === "pending"
-                ? { $nin: predictedMatchIds }
-                : { $in: predictedMatchIds };
+            if (status === "pending" || status === "predicted") {
+                const userPredictions = await Prediction.find({ user: req.user._id }).select("match");
+                const predictedMatchIds = userPredictions.map((p) => p.match);
+                matchQuery._id = status === "pending"
+                    ? { $nin: predictedMatchIds }
+                    : { $in: predictedMatchIds };
+            }
         }
+
+        const sortOrder = status === "closed" ? { startDate: -1 } : { startDate: 1 };
 
         const [total, matches] = await Promise.all([
             Match.countDocuments(matchQuery),
-            Match.find(matchQuery).sort({ startDate: 1 }).skip(skip).limit(limit),
+            Match.find(matchQuery).sort(sortOrder).skip(skip).limit(limit),
         ]);
 
         const matchIds = matches.map((m) => m._id);
